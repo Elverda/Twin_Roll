@@ -189,7 +189,7 @@ class _HeroSection extends StatelessWidget {
                     Container(
                       constraints: const BoxConstraints(maxWidth: 520),
                       child: const Text(
-                        'Risol dengan kulit alami yang renyah dipadukan dengan isian lumer yang lezat. '
+                        'Risol risol dengan kulit alami yang renyah dipadukan dengan isian lumer yang lezat. '
                             'Mengusung konsep Blind Flavour — setiap varian menghadirkan kejutan rasa '
                             'manis maupun gurih yang siap memanjakan setiap gigitanmu.',
                         textAlign: TextAlign.center,
