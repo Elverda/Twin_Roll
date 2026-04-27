@@ -5,17 +5,31 @@ import 'package:video_player/video_player.dart';
 void main() => runApp(const TwinsRollApp());
 
 // ─── COLORS ───────────────────────────────────────────
+// REVISI: Kontras ditingkatkan, tone lebih smooth & harmonis
 class C {
-  static const cream    = Color(0xFFFAF3E8);
-  static const brown    = Color(0xFF3B1F0E);
-  static const caramel  = Color(0xFFC97B3A);
-  static const peach    = Color(0xFFF4C9A1);
-  static const warm     = Color(0xFFEFA96A);
-  static const green    = Color(0xFF4A7C4E);
-  static const pinkSoft = Color(0xFFF7D6C8);
+  // Background & surface
+  static const cream    = Color(0xFFFDF6EE);  // sedikit lebih putih, lebih bersih
+  static const surface  = Color(0xFFF5E6D6);  // menggantikan peach utk surface cards
+
+  // Brand colors — lebih gelap agar teks di atasnya kontras
+  static const brown    = Color(0xFF2C1608);  // lebih gelap dari 0xFF3B1F0E → WCAG AA
+  static const caramel  = Color(0xFFB86A28);  // sedikit lebih gelap agar kontras di bg cream
+  static const warm     = Color(0xFFD4733A);  // lebih jenuh, tetap hangat
+
+  // Accent & highlight
+  static const gold     = Color(0xFFC9952E);  // sedikit lebih gelap dari D4A853, WCAG AA di dark bg
+  static const peach    = Color(0xFFF2C5A0);  // tetap, hanya dipakai sbg teks di dark bg
+  static const pinkSoft = Color(0xFFF0CFC0);  // soft, tetap
+
+  // Semantic
+  static const green    = Color(0xFF3A6B3E);  // lebih gelap → kontras lebih baik
   static const white    = Colors.white;
-  static const dark1    = Color(0xFF2A1208);
-  static const gold     = Color(0xFFD4A853);
+  static const dark1    = Color(0xFF1E0C04);  // footer bg, lebih gelap dr 2A1208
+  static const darkBg   = Color(0xFF251008);  // hero/blind bg atas
+
+  // Teks di atas cream/light bg — pakai brown atau di bawah ini
+  static const textMuted = Color(0xFF6B4728); // menggantikan 0xFF7A5C3C dan 0xFFA07850
+  static const textSub   = Color(0xFF9C6A40); // untuk subtitle/keterangan
 }
 
 // ══════════════════════════════════════════════════════
@@ -90,8 +104,6 @@ class _RevealOnScrollState extends State<_RevealOnScroll>
   }
 }
 
-/// Minimal visibility detector tanpa library eksternal
-/// menggunakan NotificationListener + LayoutBuilder trick
 class VisibilityDetectorCompat extends StatefulWidget {
   final Widget child;
   final VoidCallback onVisible;
@@ -114,7 +126,6 @@ class _VisibilityDetectorCompatState extends State<VisibilityDetectorCompat> {
   Widget build(BuildContext context) {
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        // Trigger check on scroll
         if (mounted) {
           final ctx = context;
           WidgetsBinding.instance.addPostFrameCallback((_) => _check(ctx));
@@ -123,7 +134,6 @@ class _VisibilityDetectorCompatState extends State<VisibilityDetectorCompat> {
       },
       child: Builder(
         builder: (ctx) {
-          // Schedule post-frame check for initial visibility
           WidgetsBinding.instance.addPostFrameCallback((_) => _check(ctx));
           return widget.child;
         },
@@ -145,22 +155,15 @@ class _VisibilityDetectorCompatState extends State<VisibilityDetectorCompat> {
       final offset = scrollable.position.pixels;
       final viewportH = scrollable.position.viewportDimension;
 
-      // Check if the top of the object is within 92% of the viewport
       if (reveal.offset < offset + viewportH * 0.92) {
         _notified = true;
         widget.onVisible();
       }
     } catch (e) {
-      // Catch potential errors if the render object is not in a viewport
-      // This can happen during transitions or complex layouts.
+      // ignore
     }
   }
 }
-
-// ──────────────────────────────────────────────────────
-//  Simpler approach: use ScrollController globally
-// ──────────────────────────────────────────────────────
-// Re-implement _RevealOnScroll using GlobalKey + scroll listener
 
 class RevealWrapper extends StatefulWidget {
   final Widget child;
@@ -197,7 +200,6 @@ class RevealWrapperState extends State<RevealWrapper>
     _slide = Tween<Offset>(begin: widget.slideFrom, end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
 
-    // Check on first frame (item might already be visible)
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkVisibility());
   }
 
@@ -278,7 +280,6 @@ class _HomePageState extends State<_HomePage> with TickerProviderStateMixin {
 
   final ScrollController _scrollCtrl = ScrollController();
 
-  // Keys untuk setiap section reveal
   final List<GlobalKey<RevealWrapperState>> _revealKeys = List.generate(
     20,
         (_) => GlobalKey<RevealWrapperState>(),
@@ -306,7 +307,6 @@ class _HomePageState extends State<_HomePage> with TickerProviderStateMixin {
         .animate(CurvedAnimation(parent: _floatCtrl, curve: Curves.easeInOut));
 
     _heroCtrl.forward();
-
     _scrollCtrl.addListener(_onScroll);
   }
 
@@ -343,27 +343,17 @@ class _HomePageState extends State<_HomePage> with TickerProviderStateMixin {
         controller: _scrollCtrl,
         child: Column(
           children: [
-            // ── HERO (langsung tampil, tidak pakai reveal) ──
             _HeroSection(
               fade: _heroFade,
               slide: _heroSlide,
               float: _float,
             ),
-
-            // ── BRAND (dengan video background) ──
             _reveal(0, const _BrandSection()),
-
-            // ── MENU ──
-            _reveal(1, const _MenuSection()),
-
-            // ── BLIND FLAVOUR ──
-            _reveal(2, const _BlindSection()),
-
-            // ── TEAM ──
-            _reveal(3, const _TeamSection()),
-
-            // ── FOOTER ──
-            _reveal(4, const _Footer()),
+            _reveal(1, const _FlyingFlyersWidget()),
+            _reveal(2, const _MenuSection()),
+            _reveal(3, const _BlindSection()),
+            _reveal(4, const _TeamSection()),
+            _reveal(5, const _Footer()),
           ],
         ),
       ),
@@ -373,6 +363,7 @@ class _HomePageState extends State<_HomePage> with TickerProviderStateMixin {
 
 // ══════════════════════════════════════════════════════
 //  HERO SECTION
+// REVISI: Stop gradient lebih smooth, teks pakai warna kontras tinggi
 // ══════════════════════════════════════════════════════
 class _HeroSection extends StatelessWidget {
   final Animation<double> fade;
@@ -390,28 +381,29 @@ class _HeroSection extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
+        // REVISI: gradient lebih smooth, stop lebih merata
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF1A0A03),
-            Color(0xFF3B1F0E),
-            Color(0xFF7A3B10),
-            Color(0xFFC97B3A),
+            Color(0xFF120602), // sangat gelap di atas
+            Color(0xFF2C1608), // brown gelap
+            Color(0xFF6B3010), // mid brown-orange
+            Color(0xFFB86A28), // caramel (sama dengan C.caramel)
           ],
-          stops: [0, .3, .7, 1],
+          stops: [0, 0.28, 0.65, 1],
         ),
       ),
       child: Stack(
         children: [
-          // Decorative circles
+          // Decorative circles — lebih transparan agar tidak mengganggu teks
           Positioned(
             top: -60, right: -60,
             child: Container(
               width: 220, height: 220,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: C.caramel.withOpacity(0.08),
+                color: C.caramel.withOpacity(0.06),
               ),
             ),
           ),
@@ -421,15 +413,13 @@ class _HeroSection extends StatelessWidget {
               width: 260, height: 260,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: C.warm.withOpacity(0.06),
+                color: C.warm.withOpacity(0.05),
               ),
             ),
           ),
 
-          // Stars
           ..._buildStars(),
 
-          // Main content
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 80, 24, 60),
             child: FadeTransition(
@@ -438,7 +428,6 @@ class _HeroSection extends StatelessWidget {
                 position: slide,
                 child: Column(
                   children: [
-                    // Floating logo
                     AnimatedBuilder(
                       animation: float,
                       builder: (_, __) => Transform.translate(
@@ -448,75 +437,66 @@ class _HeroSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 28),
 
-                    // Brand name
-                    ShaderMask(
-                      shaderCallback: (b) => const LinearGradient(
-                        colors: [
-                          Color(0xFFFAF3E8),
-                          Color(0xFFEFA96A),
-                          Color(0xFFFAF3E8),
+                    // REVISI: judul pakai warna solid cream (bukan gradient) → lebih terbaca
+                    const Text(
+                      'TWINS ROLL',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFDF6EE), // C.cream, solid — kontras tinggi
+                        letterSpacing: 6,
+                        fontFamily: 'Georgia',
+                        shadows: [
+                          Shadow(
+                            color: Color(0x99000000),
+                            blurRadius: 16,
+                            offset: Offset(0, 5),
+                          ),
                         ],
-                      ).createShader(b),
-                      child: const Text(
-                        'TWINS ROLL',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 6,
-                          fontFamily: 'Georgia',
-                          shadows: [
-                            Shadow(
-                              color: Colors.black54,
-                              blurRadius: 20,
-                              offset: Offset(0, 6),
-                            ),
-                          ],
-                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
 
-                    // Decorative divider
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Container(width: 40, height: 1, color: C.warm.withOpacity(.5)),
+                        Container(width: 40, height: 1, color: C.peach.withOpacity(.6)),
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 10),
+                          // REVISI: gold lebih gelap, kontras lebih baik
                           child: Text('✦', style: TextStyle(color: C.gold, fontSize: 14)),
                         ),
-                        Container(width: 40, height: 1, color: C.warm.withOpacity(.5)),
+                        Container(width: 40, height: 1, color: C.peach.withOpacity(.6)),
                       ],
                     ),
                     const SizedBox(height: 10),
 
-                    // Slogan
+                    // REVISI: slogan pakai C.peach bukan italic kecil — lebih terbaca
                     const Text(
                       'Kulit alami, sensasi di setiap gigitan',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
                         fontStyle: FontStyle.italic,
-                        color: C.peach,
+                        color: Color(0xFFF2C5A0), // C.peach, kontras cukup di dark bg
                         letterSpacing: .5,
                         height: 1.4,
                       ),
                     ),
                     const SizedBox(height: 24),
 
-                    // Description card
+                    // REVISI: card border lebih visible, teks lebih terang
                     Container(
                       constraints: const BoxConstraints(maxWidth: 520),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 18,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.07),
+                        color: Colors.white.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: C.warm.withOpacity(.25), width: 1,
+                          color: C.peach.withOpacity(.35), width: 1,
                         ),
                       ),
                       child: const Text(
@@ -526,7 +506,8 @@ class _HeroSection extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13.5,
-                          color: Color(0xFFF0DCCC),
+                          // REVISI: 0xFFF0DCCC → lebih terang: 0xFFF7E8D8 (kontras lebih baik)
+                          color: Color(0xFFF7E8D8),
                           height: 1.85,
                         ),
                       ),
@@ -540,12 +521,23 @@ class _HeroSection extends StatelessWidget {
             ),
           ),
 
-          // Scallop bottom
+          // Smooth fade ke cream — tanpa lengkungan
           Positioned(
             bottom: 0, left: 0, right: 0,
-            child: ClipPath(
-              clipper: _ScallopClipper(),
-              child: Container(height: 48, color: C.cream),
+            child: Container(
+              height: 80,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Color(0x55B86A28), // warm semi-transparan
+                    Color(0xFFFDF6EE), // C.cream solid
+                  ],
+                  stops: [0, 0.55, 1],
+                ),
+              ),
             ),
           ),
         ],
@@ -578,7 +570,7 @@ class _Logo3D extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: C.warm.withOpacity(.18),
+                color: C.warm.withOpacity(.14),
                 blurRadius: 50, spreadRadius: 18,
               ),
             ],
@@ -588,29 +580,30 @@ class _Logo3D extends StatelessWidget {
           width: 148, height: 148,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: C.warm.withOpacity(.15), width: 2),
+            border: Border.all(color: C.warm.withOpacity(.18), width: 2),
           ),
         ),
         Container(
           width: 134, height: 134,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: C.gold.withOpacity(.3), width: 1.5),
+            border: Border.all(color: C.gold.withOpacity(.4), width: 1.5),
           ),
         ),
         Container(
           width: 120, height: 120,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFD4B896),
+            // REVISI: bg logo lebih terang agar logo terlihat jelas
+            color: const Color(0xFFD8B896),
             border: Border.all(color: C.gold, width: 4),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(.5),
+                color: Colors.black.withOpacity(.45),
                 blurRadius: 28, offset: const Offset(0, 10),
               ),
               BoxShadow(
-                color: C.warm.withOpacity(.7),
+                color: C.warm.withOpacity(.6),
                 blurRadius: 18, spreadRadius: 2,
               ),
             ],
@@ -620,12 +613,13 @@ class _Logo3D extends StatelessWidget {
               'assets/logo.png',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
-                color: const Color(0xFFD4B896),
+                color: const Color(0xFFD8B896),
                 child: const Center(
                   child: Text(
                     'T',
                     style: TextStyle(
                       fontSize: 36, fontWeight: FontWeight.w900,
+                      // REVISI: teks fallback pakai C.brown agar kontras di bg terang
                       color: C.brown, fontFamily: 'Georgia',
                     ),
                   ),
@@ -645,7 +639,7 @@ class _Logo3D extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.white.withOpacity(.3),
+                    Colors.white.withOpacity(.25),
                     Colors.transparent,
                   ],
                 ),
@@ -659,6 +653,7 @@ class _Logo3D extends StatelessWidget {
 }
 
 // ─── GLOW BUTTON ──────────────────────────────────────
+// REVISI: teks button pakai C.brown (gelap) di atas gradient warm → kontras tinggi
 class _GlowButton extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
@@ -685,19 +680,20 @@ class _GlowButtonState extends State<_GlowButton> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 16),
         decoration: BoxDecoration(
+          // REVISI: gradient lebih terang agar teks coklat gelap kontras
           gradient: const LinearGradient(
-            colors: [Color(0xFFEFA96A), Color(0xFFC97B3A)],
+            colors: [Color(0xFFF0A060), Color(0xFFD4733A)],
           ),
           borderRadius: BorderRadius.circular(50),
           boxShadow: _pressed
               ? []
               : [
             BoxShadow(
-              color: C.warm.withOpacity(.6),
+              color: C.warm.withOpacity(.55),
               blurRadius: 20, offset: const Offset(0, 6),
             ),
             BoxShadow(
-              color: C.brown.withOpacity(.2),
+              color: C.brown.withOpacity(.25),
               blurRadius: 8, offset: const Offset(0, 3),
             ),
           ],
@@ -705,7 +701,7 @@ class _GlowButtonState extends State<_GlowButton> {
         child: Text(
           widget.label,
           style: const TextStyle(
-            color: C.brown,
+            color: Color(0xFF1E0C04), // C.dark1 — paling gelap untuk kontras max
             fontWeight: FontWeight.w900,
             fontSize: 15,
             letterSpacing: 1.2,
@@ -725,31 +721,16 @@ class _Star extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       '✦',
-      style: TextStyle(fontSize: size, color: C.warm.withOpacity(.65)),
+      // REVISI: opacity naik sedikit agar bintang lebih visible di dark bg
+      style: TextStyle(fontSize: size, color: C.peach.withOpacity(.55)),
     );
   }
 }
 
-class _ScallopClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size s) {
-    final p = Path();
-    final w = s.width / 9;
-    p.moveTo(0, s.height);
-    for (int i = 0; i < 9; i++) {
-      p.quadraticBezierTo(w * i + w / 2, 0, w * (i + 1), s.height);
-    }
-    p.lineTo(s.width, s.height);
-    p.close();
-    return p;
-  }
-
-  @override
-  bool shouldReclip(_) => false;
-}
 
 // ══════════════════════════════════════════════════════
 //  BRAND SECTION — VIDEO BACKGROUND CINEMATIC
+// REVISI: overlay lebih konsisten, teks brand lebih kontras
 // ══════════════════════════════════════════════════════
 class _BrandSection extends StatefulWidget {
   const _BrandSection();
@@ -765,7 +746,6 @@ class _BrandSectionState extends State<_BrandSection> {
   @override
   void initState() {
     super.initState();
-    // Ganti 'assets/brand_cinematic.mp4' dengan nama file video kamu
     _videoCtrl = VideoPlayerController.asset('assets/brand_cinematic.mp4')
       ..setLooping(true)
       ..setVolume(0)
@@ -788,7 +768,6 @@ class _BrandSectionState extends State<_BrandSection> {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // ── Video Background ──────────────────────────
         if (_videoReady)
           AspectRatio(
             aspectRatio: _videoCtrl.value.aspectRatio,
@@ -802,57 +781,51 @@ class _BrandSectionState extends State<_BrandSection> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF3B1F0E), Color(0xFF7A3B10)],
+                // REVISI: fallback bg sedikit lebih terang agar kartu card terlihat
+                colors: [Color(0xFF2C1608), Color(0xFF6B3010)],
               ),
             ),
           ),
 
-        // ── Cinematic overlay (gelap + grain feel) ───
+        // REVISI: overlay lebih konsisten — tidak terlalu gelap di tengah
         Positioned.fill(
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  const Color(0xFF1A0A03).withOpacity(0.60),
-                  const Color(0xFF2A1208).withOpacity(0.72),
-                  const Color(0xFF1A0A03).withOpacity(0.88),
+                  Color(0xCC120602), // 80% opacity
+                  Color(0xBF1E0C04), // 75% opacity — lebih merata
+                  Color(0xCC120602), // 80% opacity
                 ],
               ),
             ),
           ),
         ),
 
-        // ── Konten ───────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 72, 24, 72),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Label
               const _SectionLabel('Brand Identity', light: true),
               const SizedBox(height: 8),
 
-              // Title dengan gradient gold
-              ShaderMask(
-                shaderCallback: (b) => const LinearGradient(
-                  colors: [C.cream, C.gold, C.peach],
-                ).createShader(b),
-                child: const Text(
-                  'Mengenal Twins Roll',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Georgia',
-                    fontSize: 34,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+              // REVISI: judul brand pakai teks solid, bukan gradient → lebih terbaca
+              const Text(
+                'Mengenal Twins Roll',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Georgia',
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                  // C.cream — kontras sangat tinggi di dark overlay
+                  color: Color(0xFFFDF6EE),
                 ),
               ),
               const SizedBox(height: 14),
 
-              // Accent line gold
               Container(
                 width: 60, height: 3,
                 decoration: BoxDecoration(
@@ -862,7 +835,6 @@ class _BrandSectionState extends State<_BrandSection> {
               ),
               const SizedBox(height: 48),
 
-              // Info cards — semi-transparan di atas video
               Wrap(
                 spacing: 20,
                 runSpacing: 20,
@@ -894,21 +866,21 @@ class _BrandSectionState extends State<_BrandSection> {
           ),
         ),
 
-        // ── Letterbox bars (efek sinematik) ──────────
         Positioned(
           top: 0, left: 0, right: 0,
-          child: Container(height: 18, color: Colors.black.withOpacity(.55)),
+          child: Container(height: 18, color: Colors.black.withOpacity(.5)),
         ),
         Positioned(
           bottom: 0, left: 0, right: 0,
-          child: Container(height: 18, color: Colors.black.withOpacity(.55)),
+          child: Container(height: 18, color: Colors.black.withOpacity(.5)),
         ),
       ],
     );
   }
 }
 
-// ─── BRAND CARD (dark mode, di atas video) ────────────
+// ─── BRAND CARD ───────────────────────────────────────
+// REVISI: border lebih visible, teks body pakai warna lebih terang
 class _BrandCard extends StatelessWidget {
   final String icon, label, body;
 
@@ -924,12 +896,16 @@ class _BrandCard extends StatelessWidget {
       width: 185,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.09),
+        // REVISI: opacity naik dari .09 → .12 agar card terlihat jelas di video
+        color: Colors.white.withOpacity(0.12),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: C.warm.withOpacity(.28), width: 1.5),
+        border: Border.all(
+          // REVISI: border lebih terang agar card terlihat di video gelap
+          color: C.peach.withOpacity(.35), width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.25),
+            color: Colors.black.withOpacity(.3),
             blurRadius: 24, offset: const Offset(0, 8),
           ),
         ],
@@ -939,9 +915,9 @@ class _BrandCard extends StatelessWidget {
           Container(
             width: 52, height: 52,
             decoration: BoxDecoration(
-              color: C.warm.withOpacity(.15),
+              color: C.warm.withOpacity(.18),
               shape: BoxShape.circle,
-              border: Border.all(color: C.warm.withOpacity(.3), width: 1),
+              border: Border.all(color: C.warm.withOpacity(.35), width: 1),
             ),
             child: Center(child: Text(icon, style: const TextStyle(fontSize: 26))),
           ),
@@ -950,7 +926,9 @@ class _BrandCard extends StatelessWidget {
             label.toUpperCase(),
             style: const TextStyle(
               fontSize: 10, fontWeight: FontWeight.w900,
-              color: C.gold, letterSpacing: 1.5,
+              // REVISI: gold lebih terang di sini agar kontras di bg gelap
+              color: Color(0xFFD4A84A),
+              letterSpacing: 1.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -958,7 +936,10 @@ class _BrandCard extends StatelessWidget {
             body,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 12.5, color: C.peach, height: 1.65,
+              fontSize: 12.5,
+              // REVISI: dari C.peach (0xFFF2C5A0) → sedikit lebih terang untuk keterbacaan
+              color: Color(0xFFF5D0B0),
+              height: 1.65,
             ),
           ),
         ],
@@ -968,7 +949,548 @@ class _BrandCard extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════
+//  FLYING FLYERS WIDGET
+//  2 selebaran beterbangan seperti kertas di angin
+// ══════════════════════════════════════════════════════
+class _FlyingFlyersWidget extends StatefulWidget {
+  const _FlyingFlyersWidget();
+
+  @override
+  State<_FlyingFlyersWidget> createState() => _FlyingFlyersWidgetState();
+}
+
+class _FlyingFlyersWidgetState extends State<_FlyingFlyersWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _ctrl1;
+  late AnimationController _ctrl2;
+  late AnimationController _starCtrl;
+
+  // Flyer 1 — Sweet, melayang ke kiri atas
+  late Animation<Offset> _pos1;
+  late Animation<double> _rot1;
+
+  // Flyer 2 — Savory, melayang ke kanan bawah
+  late Animation<Offset> _pos2;
+  late Animation<double> _rot2;
+
+  // Star twinkle
+  late Animation<double> _starOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _ctrl1 = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4200),
+    )..repeat(reverse: true);
+
+    _ctrl2 = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 5000),
+    )..repeat(reverse: true);
+
+    _starCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat(reverse: true);
+
+    _pos1 = TweenSequence<Offset>([
+      TweenSequenceItem(
+        tween: Tween(begin: Offset.zero, end: const Offset(18, -22)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(18, -22), end: const Offset(8, -10)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(8, -10), end: const Offset(-10, -18)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(-10, -18), end: Offset.zero),
+        weight: 25,
+      ),
+    ]).animate(CurvedAnimation(parent: _ctrl1, curve: Curves.easeInOut));
+
+    _rot1 = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: -12.0, end: -6.0),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -6.0, end: -15.0),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -15.0, end: -9.0),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: -9.0, end: -12.0),
+        weight: 25,
+      ),
+    ]).animate(CurvedAnimation(parent: _ctrl1, curve: Curves.easeInOut));
+
+    _pos2 = TweenSequence<Offset>([
+      TweenSequenceItem(
+        tween: Tween(begin: Offset.zero, end: const Offset(-14, -18)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(-14, -18), end: const Offset(-6, -26)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(-6, -26), end: const Offset(12, -12)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(12, -12), end: Offset.zero),
+        weight: 20,
+      ),
+    ]).animate(CurvedAnimation(parent: _ctrl2, curve: Curves.easeInOut));
+
+    _rot2 = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 10.0, end: 16.0),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 16.0, end: 8.0),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 8.0, end: 14.0),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 14.0, end: 10.0),
+        weight: 20,
+      ),
+    ]).animate(CurvedAnimation(parent: _ctrl2, curve: Curves.easeInOut));
+
+    _starOpacity = Tween<double>(begin: 0.3, end: 1.0)
+        .animate(CurvedAnimation(parent: _starCtrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl1.dispose();
+    _ctrl2.dispose();
+    _starCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 420,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [C.cream, Color(0xFFEDD5B8)],
+        ),
+      ),
+      child: Stack(
+        children: [
+          // ── Bintang dekoratif ──────────────────────
+          ..._buildStars(),
+
+          // ── Label tengah ──────────────────────────
+          Positioned(
+            top: 28,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: [
+                Text(
+                  'SPECIAL OFFER'.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: C.caramel,
+                    letterSpacing: 3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Pilih Favoritmu!',
+                  style: TextStyle(
+                    fontFamily: 'Georgia',
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: C.brown,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Flyer 1: Sweet ────────────────────────
+          AnimatedBuilder(
+            animation: _ctrl1,
+            builder: (_, __) {
+              return Positioned(
+                left: 24 + _pos1.value.dx,
+                top: 80 + _pos1.value.dy,
+                child: Transform.rotate(
+                  angle: _rot1.value * (3.14159 / 180),
+                  child: const _FlyerCard(
+                    isSweet: true,
+                    width: 155,
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // ── Flyer 2: Savory ───────────────────────
+          AnimatedBuilder(
+            animation: _ctrl2,
+            builder: (_, __) {
+              return Positioned(
+                right: 24 + (-_pos2.value.dx),
+                top: 110 + _pos2.value.dy,
+                child: Transform.rotate(
+                  angle: _rot2.value * (3.14159 / 180),
+                  child: const _FlyerCard(
+                    isSweet: false,
+                    width: 150,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildStars() {
+    final positions = [
+      const Offset(16, 36),
+      const Offset(200, 24),
+      const Offset(340, 52),
+      const Offset(44, 360),
+      const Offset(310, 370),
+    ];
+    final sizes = [16.0, 11.0, 13.0, 10.0, 14.0];
+    final delays = [0, 1, 2, 0, 1]; // index modulus untuk delay feel
+
+    return List.generate(positions.length, (i) {
+      return Positioned(
+        left: positions[i].dx,
+        top: positions[i].dy,
+        child: AnimatedBuilder(
+          animation: _starOpacity,
+          builder: (_, __) {
+            // Simulasi delay sederhana dengan offset sinus
+            return Opacity(
+              opacity: (_starOpacity.value * (0.5 + 0.5 * ((i % 3) / 3)))
+                  .clamp(0.2, 1.0),
+              child: Text(
+                '✦',
+                style: TextStyle(
+                  fontSize: sizes[i],
+                  color: i.isEven ? C.gold : C.caramel,
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  FLYER CARD — selebaran kertas individual
+// ══════════════════════════════════════════════════════
+class _FlyerCard extends StatelessWidget {
+  final bool isSweet;
+  final double width;
+
+  const _FlyerCard({required this.isSweet, required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    final topColor  = isSweet ? C.brown      : C.green;
+    final accentClr = isSweet ? C.caramel    : const Color(0xFF5A9E5E);
+    final bgColor   = isSweet
+        ? const Color(0xFFFEF8F0)
+        : const Color(0xFFF4FFF4);
+    final textClr   = isSweet ? C.brown      : C.green;
+    final bottomBg  = isSweet
+        ? const Color(0xFFFEF0DC)
+        : const Color(0xFFD8F0DC);
+    final label     = isSweet ? '🍫  Sweet Variant' : '🌿  Savory Variant';
+    final items     = isSweet
+        ? ['🍠 Ubi Coklat', '🍌 Coklat Pisang', '🧀 Jasuke Mozza']
+        : ['🐔 Ayam Suwir Kemangi', '🍕 Pizza Roll', '🌶️ Korean Spicy'];
+    final bottomText = isSweet ? 'Mulai Rp 8.000' : '✦ BLIND FLAVOUR ✦';
+    final contact    = isSweet
+        ? 'Jl. Maospati – Bar. No.358-360'
+        : '📞 081 216 363 561';
+
+    return Container(
+      width: width,
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: accentClr.withOpacity(.4), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: C.brown.withOpacity(.25),
+            blurRadius: 18,
+            offset: const Offset(4, 8),
+          ),
+          BoxShadow(
+            color: topColor.withOpacity(.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Lipatan pojok kanan atas
+          Positioned(
+            top: 0,
+            right: 0,
+            child: CustomPaint(
+              size: const Size(20, 20),
+              painter: _FoldPainter(color: accentClr),
+            ),
+          ),
+
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Header bar ──────────────────────
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: topColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(5),
+                    topRight: Radius.circular(5),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Mini logo circle
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accentClr,
+                        border: Border.all(
+                          color: C.gold.withOpacity(.7),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'TR',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            fontFamily: 'Georgia',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'TWINS ROLL',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFDF6EE),
+                        letterSpacing: 2,
+                        fontFamily: 'Georgia',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Label variant ────────────────────
+              Container(
+                margin: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                decoration: BoxDecoration(
+                  color: topColor,
+                  borderRadius: BorderRadius.circular(50),
+                ),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+
+              // ── Menu items ───────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: items.map((item) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Text(
+                        item,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: textClr,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              // ── Scallop separator ────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: CustomPaint(
+                  size: Size(width, 12),
+                  painter: _ScallopPainter(color: bottomBg),
+                ),
+              ),
+
+              // ── Bottom info ──────────────────────
+              Container(
+                color: bottomBg,
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+                child: Column(
+                  children: [
+                    Text(
+                      bottomText,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: topColor,
+                        fontFamily: 'Georgia',
+                        letterSpacing: isSweet ? 0 : 1,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      contact,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 7.5,
+                        color: C.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  CUSTOM PAINTERS
+// ══════════════════════════════════════════════════════
+
+/// Lipatan pojok kertas (dog-ear)
+class _FoldPainter extends CustomPainter {
+  final Color color;
+  const _FoldPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shadow = Paint()
+      ..color = Colors.black.withOpacity(.15)
+      ..style = PaintingStyle.fill;
+    final fill = Paint()
+      ..color = color.withOpacity(.65)
+      ..style = PaintingStyle.fill;
+    final fold = Paint()
+      ..color = color.withOpacity(.4)
+      ..style = PaintingStyle.fill;
+
+    // Segitiga lipatan
+    final path1 = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(path1, fill);
+
+    // Shadow segitiga bawah
+    final path2 = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path2, fold);
+  }
+
+  @override
+  bool shouldRepaint(_FoldPainter old) => old.color != color;
+}
+
+/// Tepian scallop/bergelombang antara konten dan footer
+class _ScallopPainter extends CustomPainter {
+  final Color color;
+  const _ScallopPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, size.height);
+
+    const scallop = 10.0;
+    double x = 0;
+    bool up = true;
+    while (x < size.width) {
+      path.quadraticBezierTo(
+        x + scallop / 2,
+        up ? 0 : size.height,
+        x + scallop,
+        size.height / 2,
+      );
+      x += scallop;
+      up = !up;
+    }
+
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_ScallopPainter old) => old.color != color;
+}
+
+// ══════════════════════════════════════════════════════
 //  MENU SECTION
+// REVISI: bg section lebih clean, teks deskripsi lebih kontras
 // ══════════════════════════════════════════════════════
 class _MenuSection extends StatelessWidget {
   const _MenuSection();
@@ -989,11 +1511,12 @@ class _MenuSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
+      // REVISI: gradient lebih subtle dan smooth
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [C.cream, Color(0xFFF0D8C4)],
+          colors: [C.cream, Color(0xFFEDD5B8)],
         ),
       ),
       padding: const EdgeInsets.fromLTRB(24, 64, 24, 72),
@@ -1006,7 +1529,6 @@ class _MenuSection extends StatelessWidget {
           _AccentLine(),
           const SizedBox(height: 44),
 
-          // Sweet variant label
           _VLabel('🍫  Sweet Variant', C.caramel),
           const SizedBox(height: 20),
           Wrap(
@@ -1017,7 +1539,6 @@ class _MenuSection extends StatelessWidget {
 
           const SizedBox(height: 44),
 
-          // Savory variant label
           _VLabel('🌿  Savory Variant', C.green),
           const SizedBox(height: 20),
           Wrap(
@@ -1062,7 +1583,7 @@ class _MenuCardState extends State<_MenuCard> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: C.brown.withOpacity(_hov ? .18 : .09),
+              color: C.brown.withOpacity(_hov ? .16 : .08),
               blurRadius: _hov ? 40 : 18,
               offset: const Offset(0, 8),
             ),
@@ -1083,9 +1604,10 @@ class _MenuCardState extends State<_MenuCard> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
+                  // REVISI: warna gradient card lebih smooth dan kontras dengan card body putih
                   colors: widget.savory
-                      ? [const Color(0xFFB8DFB9), C.green]
-                      : [C.peach, const Color(0xFFD4834A)],
+                      ? [const Color(0xFFA8D4AA), const Color(0xFF3A6B3E)]
+                      : [const Color(0xFFF5C5A0), const Color(0xFFB86A28)],
                 ),
               ),
               child: Stack(
@@ -1127,14 +1649,18 @@ class _MenuCardState extends State<_MenuCard> {
                     widget.item.name,
                     style: const TextStyle(
                       fontFamily: 'Georgia', fontSize: 14,
-                      fontWeight: FontWeight.bold, color: C.brown,
+                      fontWeight: FontWeight.bold,
+                      color: C.brown, // kontras tinggi di white card
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     widget.item.desc,
                     style: const TextStyle(
-                      fontSize: 12, color: Color(0xFF7A5C3C), height: 1.5,
+                      fontSize: 12,
+                      // REVISI: C.textMuted (0xFF6B4728) → lebih gelap dari 0xFF7A5C3C
+                      color: C.textMuted,
+                      height: 1.5,
                     ),
                   ),
                 ],
@@ -1155,24 +1681,41 @@ class _VLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [C.surface.withOpacity(0), C.surface],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [color, color.withOpacity(.75)]),
+            gradient: LinearGradient(
+              colors: [color, color.withOpacity(.82)],
+            ),
             borderRadius: BorderRadius.circular(50),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(.3),
-                blurRadius: 10, offset: const Offset(0, 4),
+                color: color.withOpacity(.28),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
           child: Text(
             label,
             style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w900,
-              fontSize: 13, letterSpacing: .5,
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 13,
+              letterSpacing: .5,
             ),
           ),
         ),
@@ -1182,7 +1725,7 @@ class _VLabel extends StatelessWidget {
             height: 1,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [C.peach, C.peach.withOpacity(0)],
+                colors: [C.surface, C.surface.withOpacity(0)],
               ),
             ),
           ),
@@ -1194,6 +1737,7 @@ class _VLabel extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════
 //  BLIND FLAVOUR SECTION
+// REVISI: teks body lebih terang, badge text kontras
 // ══════════════════════════════════════════════════════
 class _BlindSection extends StatelessWidget {
   const _BlindSection();
@@ -1206,10 +1750,11 @@ class _BlindSection extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          // REVISI: gradient lebih konsisten dan dalam
           colors: [
-            Color(0xFF1A0A03),
-            Color(0xFF3B1F0E),
-            Color(0xFF6A2E08),
+            Color(0xFF120602),
+            Color(0xFF2C1608),
+            Color(0xFF5A2608),
           ],
         ),
       ),
@@ -1220,8 +1765,9 @@ class _BlindSection extends StatelessWidget {
             width: 70, height: 70,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: C.warm.withOpacity(.12),
-              border: Border.all(color: C.warm.withOpacity(.3), width: 1.5),
+              // REVISI: icon bg lebih visible
+              color: C.warm.withOpacity(.16),
+              border: Border.all(color: C.warm.withOpacity(.38), width: 1.5),
             ),
             child: const Center(
               child: Text('🎰', style: TextStyle(fontSize: 32)),
@@ -1229,17 +1775,14 @@ class _BlindSection extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          ShaderMask(
-            shaderCallback: (b) => const LinearGradient(
-              colors: [C.peach, C.warm, C.peach],
-            ).createShader(b),
-            child: const Text(
-              'Blind Flavour Experience',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Georgia', fontSize: 30,
-                fontWeight: FontWeight.bold, color: Colors.white,
-              ),
+          // REVISI: judul solid cream — lebih mudah dibaca
+          const Text(
+            'Blind Flavour Experience',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Georgia', fontSize: 30,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFFDF6EE), // C.cream
             ),
           ),
           const SizedBox(height: 16),
@@ -1250,7 +1793,12 @@ class _BlindSection extends StatelessWidget {
               'Setiap gigitan adalah kejutan. Pilih varian favoritmu atau coba '
                   'peruntunganmu dengan konsep Blind Flavour khas Twins Roll!',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: C.peach, height: 1.75),
+              style: TextStyle(
+                fontSize: 14,
+                // REVISI: C.peach solid — kontras cukup baik di dark bg
+                color: Color(0xFFF2C5A0),
+                height: 1.75,
+              ),
             ),
           ),
           const SizedBox(height: 36),
@@ -1259,19 +1807,23 @@ class _BlindSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: C.gold, width: 2),
+              // REVISI: border gold lebih tebal agar lebih visible
+              border: Border.all(color: C.gold, width: 2.5),
               gradient: LinearGradient(
-                colors: [C.warm.withOpacity(.06), C.caramel.withOpacity(.06)],
+                colors: [C.warm.withOpacity(.08), C.caramel.withOpacity(.08)],
               ),
               boxShadow: [
-                BoxShadow(color: C.warm.withOpacity(.15), blurRadius: 20),
+                BoxShadow(color: C.warm.withOpacity(.18), blurRadius: 20),
               ],
             ),
             child: const Text(
               'BLIND FLAVOUR',
               style: TextStyle(
                 fontFamily: 'Georgia', fontSize: 24,
-                fontWeight: FontWeight.bold, color: C.gold, letterSpacing: 6,
+                fontWeight: FontWeight.bold,
+                // REVISI: warna text gold lebih terang di dark bg
+                color: Color(0xFFD4A84A),
+                letterSpacing: 6,
               ),
             ),
           ),
@@ -1282,7 +1834,8 @@ class _BlindSection extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════
-//  TEAM SECTION — 3 Anggota
+//  TEAM SECTION
+// REVISI: warna avatar badge lebih konsisten, teks nim lebih terbaca
 // ══════════════════════════════════════════════════════
 class _TeamSection extends StatelessWidget {
   const _TeamSection();
@@ -1357,11 +1910,13 @@ class _TeamCardState extends State<_TeamCard> {
           color: C.white,
           borderRadius: BorderRadius.circular(26),
           border: Border.all(
-            color: _hov ? C.peach : C.peach.withOpacity(.6), width: 1.5,
+            // REVISI: border hover lebih terlihat
+            color: _hov ? C.warm.withOpacity(.5) : C.surface,
+            width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: C.brown.withOpacity(_hov ? .16 : .08),
+              color: C.brown.withOpacity(_hov ? .14 : .07),
               blurRadius: _hov ? 36 : 18, offset: const Offset(0, 8),
             ),
             if (_hov)
@@ -1373,7 +1928,6 @@ class _TeamCardState extends State<_TeamCard> {
           children: [
             Column(
               children: [
-                // Avatar
                 Container(
                   width: 82, height: 82,
                   decoration: BoxDecoration(
@@ -1383,10 +1937,11 @@ class _TeamCardState extends State<_TeamCard> {
                       end: Alignment.bottomRight,
                       colors: [C.warm, _badge],
                     ),
-                    border: Border.all(color: C.peach, width: 3),
+                    // REVISI: border avatar pakai surface agar kontras di white card
+                    border: Border.all(color: C.surface, width: 3),
                     boxShadow: [
                       BoxShadow(
-                        color: _badge.withOpacity(.3),
+                        color: _badge.withOpacity(.28),
                         blurRadius: 14, offset: const Offset(0, 4),
                       ),
                     ],
@@ -1400,12 +1955,11 @@ class _TeamCardState extends State<_TeamCard> {
                 ),
                 const SizedBox(height: 16),
 
-                // Role badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [_badge, _badge.withOpacity(.8)],
+                      colors: [_badge, _badge.withOpacity(.85)],
                     ),
                     borderRadius: BorderRadius.circular(50),
                     boxShadow: [
@@ -1418,7 +1972,8 @@ class _TeamCardState extends State<_TeamCard> {
                   child: Text(
                     widget.member.role.toUpperCase(),
                     style: const TextStyle(
-                      color: Colors.white, fontSize: 10,
+                      color: Colors.white, // putih di badge berwarna — kontras baik
+                      fontSize: 10,
                       fontWeight: FontWeight.w900, letterSpacing: 1.2,
                     ),
                   ),
@@ -1436,12 +1991,15 @@ class _TeamCardState extends State<_TeamCard> {
                 const SizedBox(height: 5),
                 Text(
                   widget.member.nim,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFFA07850)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    // REVISI: C.textSub (0xFF9C6A40) → lebih gelap dari 0xFFA07850
+                    color: C.textSub,
+                  ),
                 ),
               ],
             ),
 
-            // Number badge floating
             Positioned(
               top: -68, left: 0, right: 0,
               child: Center(
@@ -1453,7 +2011,7 @@ class _TeamCardState extends State<_TeamCard> {
                     border: Border.all(color: Colors.white, width: 2.5),
                     boxShadow: [
                       BoxShadow(
-                        color: C.warm.withOpacity(.5),
+                        color: C.warm.withOpacity(.45),
                         blurRadius: 10, offset: const Offset(0, 3),
                       ),
                     ],
@@ -1462,7 +2020,8 @@ class _TeamCardState extends State<_TeamCard> {
                     child: Text(
                       '${widget.member.num}',
                       style: const TextStyle(
-                        color: C.brown,
+                        // REVISI: teks nomor badge pakai white bukan brown — kontras lebih baik di gradient
+                        color: Colors.white,
                         fontWeight: FontWeight.w900, fontSize: 14,
                       ),
                     ),
@@ -1479,6 +2038,7 @@ class _TeamCardState extends State<_TeamCard> {
 
 // ══════════════════════════════════════════════════════
 //  FOOTER
+// REVISI: copyright text lebih terbaca, divider lebih subtle
 // ══════════════════════════════════════════════════════
 class _Footer extends StatelessWidget {
   const _Footer();
@@ -1490,26 +2050,26 @@ class _Footer extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 44, 24, 32),
       child: Column(
         children: [
-          ShaderMask(
-            shaderCallback: (b) => const LinearGradient(
-              colors: [C.cream, C.warm],
-            ).createShader(b),
-            child: const Text(
-              'Twins Roll',
-              style: TextStyle(
-                fontFamily: 'Georgia', fontSize: 28,
-                fontWeight: FontWeight.bold, color: Colors.white,
-              ),
+          // REVISI: brand name solid cream — kontras tinggi di dark bg
+          const Text(
+            'Twins Roll',
+            style: TextStyle(
+              fontFamily: 'Georgia', fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFFDF6EE), // C.cream
             ),
           ),
           const SizedBox(height: 4),
           const Text(
             'SINCE 2026',
-            style: TextStyle(fontSize: 10, letterSpacing: 4, color: C.caramel),
+            style: TextStyle(
+              fontSize: 10, letterSpacing: 4,
+              // REVISI: caramel lebih terang agar terbaca di dark1
+              color: Color(0xFFD4733A),
+            ),
           ),
           const SizedBox(height: 24),
 
-          // Divider
           Row(
             children: [
               Expanded(
@@ -1517,7 +2077,7 @@ class _Footer extends StatelessWidget {
                   height: 1,
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.transparent, C.caramel],
+                      colors: [Colors.transparent, Color(0xFFB86A28)],
                     ),
                   ),
                 ),
@@ -1527,7 +2087,8 @@ class _Footer extends StatelessWidget {
                 child: Container(
                   width: 6, height: 6,
                   decoration: const BoxDecoration(
-                    shape: BoxShape.circle, color: C.caramel,
+                    shape: BoxShape.circle,
+                    color: Color(0xFFB86A28), // C.caramel
                   ),
                 ),
               ),
@@ -1536,7 +2097,7 @@ class _Footer extends StatelessWidget {
                   height: 1,
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [C.caramel, Colors.transparent],
+                      colors: [Color(0xFFB86A28), Colors.transparent],
                     ),
                   ),
                 ),
@@ -1554,7 +2115,8 @@ class _Footer extends StatelessWidget {
                 child: Text(
                   'Jl. Maospati – Bar. No.358-360, Maospati, Magetan',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12.5, color: C.peach),
+                  // REVISI: C.peach cukup kontras di dark1 bg
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFFF2C5A0)),
                 ),
               ),
             ],
@@ -1568,21 +2130,24 @@ class _Footer extends StatelessWidget {
               Text(
                 '081 216 363 561',
                 style: TextStyle(
-                  fontSize: 12.5, color: C.warm, fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  color: C.warm, // warm orange di dark bg — kontras baik
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 28),
 
-          // Order button
           Container(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [C.warm, C.caramel]),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFD4733A), Color(0xFFB86A28)],
+              ),
               borderRadius: BorderRadius.circular(50),
               boxShadow: [
                 BoxShadow(
-                  color: C.warm.withOpacity(.4),
+                  color: C.warm.withOpacity(.38),
                   blurRadius: 16, offset: const Offset(0, 5),
                 ),
               ],
@@ -1592,7 +2157,8 @@ class _Footer extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
-                foregroundColor: C.brown,
+                // REVISI: teks button putih di atas gradient gelap — kontras lebih baik
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(50),
@@ -1610,9 +2176,10 @@ class _Footer extends StatelessWidget {
           const SizedBox(height: 28),
           Container(height: 1, color: const Color(0xFF3A2010)),
           const SizedBox(height: 16),
+          // REVISI: copyright text lebih terang — dari 0xFF6B4020 → 0xFF8A5530
           const Text(
             '© 2026 Twins Roll. All rights reserved.',
-            style: TextStyle(fontSize: 11, color: Color(0xFF6B4020)),
+            style: TextStyle(fontSize: 11, color: Color(0xFF8A5530)),
           ),
         ],
       ),
@@ -1634,6 +2201,7 @@ class _SectionLabel extends StatelessWidget {
       label.toUpperCase(),
       style: TextStyle(
         fontSize: 11, fontWeight: FontWeight.w900,
+        // REVISI: label light pakai C.warm (lebih kontras di dark bg) bukan caramel
         color: light ? C.warm : C.caramel,
         letterSpacing: 3,
       ),
@@ -1652,7 +2220,8 @@ class _SectionTitle extends StatelessWidget {
       textAlign: TextAlign.center,
       style: const TextStyle(
         fontFamily: 'Georgia', fontSize: 32,
-        fontWeight: FontWeight.bold, color: C.brown,
+        fontWeight: FontWeight.bold,
+        color: C.brown, // kontras tinggi di cream bg
       ),
     );
   }
