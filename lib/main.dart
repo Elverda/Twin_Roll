@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:video_player/video_player.dart';
 
 void main() => runApp(const TwinsRollApp());
 
@@ -16,7 +18,230 @@ class C {
   static const gold     = Color(0xFFD4A853);
 }
 
-// ─── APP ──────────────────────────────────────────────
+// ══════════════════════════════════════════════════════
+//  SCROLL REVEAL WRAPPER
+// ══════════════════════════════════════════════════════
+class _RevealOnScroll extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+  final Offset slideFrom;
+
+  const _RevealOnScroll({
+    required this.child,
+    this.delay = Duration.zero,
+    this.slideFrom = const Offset(0, 40),
+  });
+
+  @override
+  State<_RevealOnScroll> createState() => _RevealOnScrollState();
+}
+
+class _RevealOnScrollState extends State<_RevealOnScroll>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade;
+  late Animation<Offset> _slide;
+  bool _triggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: widget.slideFrom,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _trigger() {
+    if (_triggered) return;
+    _triggered = true;
+    Future.delayed(widget.delay, () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return VisibilityDetectorCompat(
+      onVisible: _trigger,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) => FadeTransition(
+          opacity: _fade,
+          child: Transform.translate(
+            offset: _slide.value,
+            child: child,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Minimal visibility detector tanpa library eksternal
+/// menggunakan NotificationListener + LayoutBuilder trick
+class VisibilityDetectorCompat extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onVisible;
+
+  const VisibilityDetectorCompat({
+    super.key,
+    required this.child,
+    required this.onVisible,
+  });
+
+  @override
+  State<VisibilityDetectorCompat> createState() =>
+      _VisibilityDetectorCompatState();
+}
+
+class _VisibilityDetectorCompatState extends State<VisibilityDetectorCompat> {
+  bool _notified = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        // Trigger check on scroll
+        if (mounted) {
+          final ctx = context;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _check(ctx));
+        }
+        return false;
+      },
+      child: Builder(
+        builder: (ctx) {
+          // Schedule post-frame check for initial visibility
+          WidgetsBinding.instance.addPostFrameCallback((_) => _check(ctx));
+          return widget.child;
+        },
+      ),
+    );
+  }
+
+  void _check(BuildContext ctx) {
+    if (_notified || !mounted) return;
+    final renderObj = ctx.findRenderObject();
+    if (renderObj == null) return;
+
+    try {
+      final viewport = RenderAbstractViewport.of(renderObj);
+      if (viewport == null) return;
+      final reveal = viewport.getOffsetToReveal(renderObj, 0.0);
+      final scrollable = Scrollable.of(ctx);
+      if (scrollable == null) return;
+      final offset = scrollable.position.pixels;
+      final viewportH = scrollable.position.viewportDimension;
+
+      // Check if the top of the object is within 92% of the viewport
+      if (reveal.offset < offset + viewportH * 0.92) {
+        _notified = true;
+        widget.onVisible();
+      }
+    } catch (e) {
+      // Catch potential errors if the render object is not in a viewport
+      // This can happen during transitions or complex layouts.
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────
+//  Simpler approach: use ScrollController globally
+// ──────────────────────────────────────────────────────
+// Re-implement _RevealOnScroll using GlobalKey + scroll listener
+
+class RevealWrapper extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+  final Offset slideFrom;
+
+  const RevealWrapper({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.slideFrom = const Offset(0, 50),
+  });
+
+  @override
+  State<RevealWrapper> createState() => RevealWrapperState();
+}
+
+class RevealWrapperState extends State<RevealWrapper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade;
+  late Animation<Offset> _slide;
+  final GlobalKey _key = GlobalKey();
+  bool _triggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
+    _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(begin: widget.slideFrom, end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+
+    // Check on first frame (item might already be visible)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkVisibility());
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void checkFromScroll() => _checkVisibility();
+
+  void _checkVisibility() {
+    if (_triggered || !mounted) return;
+    final ctx = _key.currentContext;
+    if (ctx == null) return;
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final pos    = box.localToGlobal(Offset.zero);
+    final size   = MediaQuery.of(ctx).size;
+    if (pos.dy < size.height * 0.95) {
+      _triggered = true;
+      Future.delayed(widget.delay, () {
+        if (mounted) _ctrl.forward();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      key: _key,
+      builder: (_, child) => FadeTransition(
+        opacity: _fade,
+        child: Transform.translate(offset: _slide.value, child: child),
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────
+//  APP
+// ──────────────────────────────────────────────────────
 class TwinsRollApp extends StatelessWidget {
   const TwinsRollApp({super.key});
 
@@ -34,7 +259,9 @@ class TwinsRollApp extends StatelessWidget {
   }
 }
 
-// ─── HOME ─────────────────────────────────────────────
+// ──────────────────────────────────────────────────────
+//  HOME PAGE
+// ──────────────────────────────────────────────────────
 class _HomePage extends StatefulWidget {
   const _HomePage();
 
@@ -49,9 +276,18 @@ class _HomePageState extends State<_HomePage> with TickerProviderStateMixin {
   late final Animation<Offset>   _heroSlide;
   late final Animation<double>   _float;
 
+  final ScrollController _scrollCtrl = ScrollController();
+
+  // Keys untuk setiap section reveal
+  final List<GlobalKey<RevealWrapperState>> _revealKeys = List.generate(
+    20,
+        (_) => GlobalKey<RevealWrapperState>(),
+  );
+
   @override
   void initState() {
     super.initState();
+
     _heroCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1100),
@@ -62,33 +298,72 @@ class _HomePageState extends State<_HomePage> with TickerProviderStateMixin {
     )..repeat(reverse: true);
 
     _heroFade = CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOut);
-    _heroSlide = Tween<Offset>(begin: const Offset(0, -.18), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOutCubic));
+    _heroSlide = Tween<Offset>(
+      begin: const Offset(0, -.18),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _heroCtrl, curve: Curves.easeOutCubic));
     _float = Tween<double>(begin: -8, end: 8)
         .animate(CurvedAnimation(parent: _floatCtrl, curve: Curves.easeInOut));
 
     _heroCtrl.forward();
+
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    for (final k in _revealKeys) {
+      k.currentState?.checkFromScroll();
+    }
   }
 
   @override
   void dispose() {
     _heroCtrl.dispose();
     _floatCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  Widget _reveal(int idx, Widget child, {
+    Duration delay = Duration.zero,
+    Offset from = const Offset(0, 50),
+  }) {
+    return RevealWrapper(
+      key: _revealKeys[idx],
+      delay: delay,
+      slideFrom: from,
+      child: child,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
+        controller: _scrollCtrl,
         child: Column(
           children: [
-            _HeroSection(fade: _heroFade, slide: _heroSlide, float: _float),
-            const _BrandSection(),
-            const _MenuSection(),
-            const _BlindSection(),
-            const _TeamSection(),
-            const _Footer(),
+            // ── HERO (langsung tampil, tidak pakai reveal) ──
+            _HeroSection(
+              fade: _heroFade,
+              slide: _heroSlide,
+              float: _float,
+            ),
+
+            // ── BRAND (dengan video background) ──
+            _reveal(0, const _BrandSection()),
+
+            // ── MENU ──
+            _reveal(1, const _MenuSection()),
+
+            // ── BLIND FLAVOUR ──
+            _reveal(2, const _BlindSection()),
+
+            // ── TEAM ──
+            _reveal(3, const _TeamSection()),
+
+            // ── FOOTER ──
+            _reveal(4, const _Footer()),
           ],
         ),
       ),
@@ -97,7 +372,7 @@ class _HomePageState extends State<_HomePage> with TickerProviderStateMixin {
 }
 
 // ══════════════════════════════════════════════════════
-//  HERO
+//  HERO SECTION
 // ══════════════════════════════════════════════════════
 class _HeroSection extends StatelessWidget {
   final Animation<double> fade;
@@ -129,13 +404,11 @@ class _HeroSection extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Background decorative circles
+          // Decorative circles
           Positioned(
-            top: -60,
-            right: -60,
+            top: -60, right: -60,
             child: Container(
-              width: 220,
-              height: 220,
+              width: 220, height: 220,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: C.caramel.withOpacity(0.08),
@@ -143,11 +416,9 @@ class _HeroSection extends StatelessWidget {
             ),
           ),
           Positioned(
-            bottom: 40,
-            left: -80,
+            bottom: 40, left: -80,
             child: Container(
-              width: 260,
-              height: 260,
+              width: 260, height: 260,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: C.warm.withOpacity(0.06),
@@ -155,10 +426,10 @@ class _HeroSection extends StatelessWidget {
             ),
           ),
 
-          // Star sparkles
-          ..._stars(),
+          // Stars
+          ..._buildStars(),
 
-          // Content
+          // Main content
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 80, 24, 60),
             child: FadeTransition(
@@ -167,7 +438,7 @@ class _HeroSection extends StatelessWidget {
                 position: slide,
                 child: Column(
                   children: [
-                    // Animated Logo
+                    // Floating logo
                     AnimatedBuilder(
                       animation: float,
                       builder: (_, __) => Transform.translate(
@@ -177,7 +448,7 @@ class _HeroSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 28),
 
-                    // Brand name with gradient
+                    // Brand name
                     ShaderMask(
                       shaderCallback: (b) => const LinearGradient(
                         colors: [
@@ -207,27 +478,16 @@ class _HeroSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
 
-                    // Decorative line
+                    // Decorative divider
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Container(
-                          width: 40,
-                          height: 1,
-                          color: C.warm.withOpacity(.5),
-                        ),
+                        Container(width: 40, height: 1, color: C.warm.withOpacity(.5)),
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            '✦',
-                            style: TextStyle(color: C.gold, fontSize: 14),
-                          ),
+                          child: Text('✦', style: TextStyle(color: C.gold, fontSize: 14)),
                         ),
-                        Container(
-                          width: 40,
-                          height: 1,
-                          color: C.warm.withOpacity(.5),
-                        ),
+                        Container(width: 40, height: 1, color: C.warm.withOpacity(.5)),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -250,15 +510,13 @@ class _HeroSection extends StatelessWidget {
                     Container(
                       constraints: const BoxConstraints(maxWidth: 520),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 18,
+                        horizontal: 24, vertical: 18,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.07),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: C.warm.withOpacity(.25),
-                          width: 1,
+                          color: C.warm.withOpacity(.25), width: 1,
                         ),
                       ),
                       child: const Text(
@@ -275,7 +533,6 @@ class _HeroSection extends StatelessWidget {
                     ),
                     const SizedBox(height: 36),
 
-                    // CTA Button
                     _GlowButton(label: '🍴  Lihat Menu Kami', onTap: () {}),
                   ],
                 ),
@@ -285,9 +542,7 @@ class _HeroSection extends StatelessWidget {
 
           // Scallop bottom
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: ClipPath(
               clipper: _ScallopClipper(),
               child: Container(height: 48, color: C.cream),
@@ -298,7 +553,7 @@ class _HeroSection extends StatelessWidget {
     );
   }
 
-  List<Widget> _stars() => const [
+  List<Widget> _buildStars() => const [
     Positioned(top: 32,  left: 24,  child: _Star(size: 16, delay: 0)),
     Positioned(top: 60,  right: 36, child: _Star(size: 11, delay: .4)),
     Positioned(top: 120, left: 70,  child: _Star(size: 9,  delay: .8)),
@@ -308,7 +563,7 @@ class _HeroSection extends StatelessWidget {
   ];
 }
 
-// ─── 3D LOGO WIDGET — menggunakan Image.asset ─────────
+// ─── 3D LOGO ──────────────────────────────────────────
 class _Logo3D extends StatelessWidget {
   const _Logo3D();
 
@@ -317,43 +572,34 @@ class _Logo3D extends StatelessWidget {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Outer glow ring 3
         Container(
-          width: 164,
-          height: 164,
+          width: 164, height: 164,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
                 color: C.warm.withOpacity(.18),
-                blurRadius: 50,
-                spreadRadius: 18,
+                blurRadius: 50, spreadRadius: 18,
               ),
             ],
           ),
         ),
-        // Outer glow ring 2
         Container(
-          width: 148,
-          height: 148,
+          width: 148, height: 148,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: C.warm.withOpacity(.15), width: 2),
           ),
         ),
-        // Outer glow ring 1
         Container(
-          width: 134,
-          height: 134,
+          width: 134, height: 134,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: C.gold.withOpacity(.3), width: 1.5),
           ),
         ),
-        // Main logo circle dengan Image.asset
         Container(
-          width: 120,
-          height: 120,
+          width: 120, height: 120,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: const Color(0xFFD4B896),
@@ -361,23 +607,11 @@ class _Logo3D extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(.5),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
+                blurRadius: 28, offset: const Offset(0, 10),
               ),
               BoxShadow(
                 color: C.warm.withOpacity(.7),
-                blurRadius: 18,
-                spreadRadius: 2,
-              ),
-              BoxShadow(
-                color: C.brown.withOpacity(.25),
-                blurRadius: 8,
-                offset: const Offset(4, 4),
-              ),
-              const BoxShadow(
-                color: Color(0x55FFFFFF),
-                blurRadius: 8,
-                offset: Offset(-3, -3),
+                blurRadius: 18, spreadRadius: 2,
               ),
             ],
           ),
@@ -385,35 +619,26 @@ class _Logo3D extends StatelessWidget {
             child: Image.asset(
               'assets/logo.png',
               fit: BoxFit.cover,
-              // Tampilkan placeholder jika gambar gagal dimuat
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: const Color(0xFFD4B896),
-                  child: const Center(
-                    child: Text(
-                      'T',
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w900,
-                        color: C.brown,
-                        fontFamily: 'Georgia',
-                      ),
+              errorBuilder: (_, __, ___) => Container(
+                color: const Color(0xFFD4B896),
+                child: const Center(
+                  child: Text(
+                    'T',
+                    style: TextStyle(
+                      fontSize: 36, fontWeight: FontWeight.w900,
+                      color: C.brown, fontFamily: 'Georgia',
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ),
         ),
-        // Top highlight for 3D effect
         Positioned(
-          top: 20,
-          left: 0,
-          right: 0,
+          top: 20, left: 0, right: 0,
           child: Center(
             child: Container(
-              width: 52,
-              height: 20,
+              width: 52, height: 20,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 gradient: LinearGradient(
@@ -450,7 +675,7 @@ class _GlowButtonState extends State<_GlowButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
+      onTapDown:  (_) => setState(() => _pressed = true),
       onTapUp: (_) {
         setState(() => _pressed = false);
         widget.onTap();
@@ -469,13 +694,11 @@ class _GlowButtonState extends State<_GlowButton> {
               : [
             BoxShadow(
               color: C.warm.withOpacity(.6),
-              blurRadius: 20,
-              offset: const Offset(0, 6),
+              blurRadius: 20, offset: const Offset(0, 6),
             ),
             BoxShadow(
               color: C.brown.withOpacity(.2),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+              blurRadius: 8, offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -493,10 +716,9 @@ class _GlowButtonState extends State<_GlowButton> {
   }
 }
 
-// ─── STAR ─────────────────────────────────────────────
+// ─── STAR & SCALLOP ───────────────────────────────────
 class _Star extends StatelessWidget {
   final double size, delay;
-
   const _Star({required this.size, required this.delay});
 
   @override
@@ -508,7 +730,6 @@ class _Star extends StatelessWidget {
   }
 }
 
-// ─── SCALLOP ──────────────────────────────────────────
 class _ScallopClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size s) {
@@ -528,87 +749,174 @@ class _ScallopClipper extends CustomClipper<Path> {
 }
 
 // ══════════════════════════════════════════════════════
-//  BRAND IDENTITY
+//  BRAND SECTION — VIDEO BACKGROUND CINEMATIC
 // ══════════════════════════════════════════════════════
-class _BrandSection extends StatelessWidget {
+class _BrandSection extends StatefulWidget {
   const _BrandSection();
 
   @override
+  State<_BrandSection> createState() => _BrandSectionState();
+}
+
+class _BrandSectionState extends State<_BrandSection> {
+  late VideoPlayerController _videoCtrl;
+  bool _videoReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ganti 'assets/brand_cinematic.mp4' dengan nama file video kamu
+    _videoCtrl = VideoPlayerController.asset('assets/brand_cinematic.mp4')
+      ..setLooping(true)
+      ..setVolume(0)
+      ..initialize().then((_) {
+        if (mounted) {
+          setState(() => _videoReady = true);
+          _videoCtrl.play();
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _videoCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      color: C.cream,
-      padding: const EdgeInsets.fromLTRB(24, 72, 24, 64),
-      child: Column(
-        children: [
-          const _Label('Brand Identity'),
-          const SizedBox(height: 8),
-          const _Title('Mengenal Twins Roll'),
-          const SizedBox(height: 12),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // ── Video Background ──────────────────────────
+        if (_videoReady)
+          AspectRatio(
+            aspectRatio: _videoCtrl.value.aspectRatio,
+            child: VideoPlayer(_videoCtrl),
+          )
+        else
           Container(
-            width: 60,
-            height: 3,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [C.caramel, C.warm]),
-              borderRadius: BorderRadius.circular(4),
+            height: 520,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF3B1F0E), Color(0xFF7A3B10)],
+              ),
             ),
           ),
-          const SizedBox(height: 44),
 
-          Wrap(
-            spacing: 20,
-            runSpacing: 20,
-            alignment: WrapAlignment.center,
-            children: const [
-              _ICard(
-                icon: '🏷️',
-                label: 'Nama Brand',
-                body: 'Twins Roll\nDua varian rasa dalam satu identitas khas.',
+        // ── Cinematic overlay (gelap + grain feel) ───
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  const Color(0xFF1A0A03).withOpacity(0.60),
+                  const Color(0xFF2A1208).withOpacity(0.72),
+                  const Color(0xFF1A0A03).withOpacity(0.88),
+                ],
               ),
-              _ICard(
-                icon: '✨',
-                label: 'Slogan',
-                body: '"Kulit alami,\nsensasi di setiap gigitan"',
+            ),
+          ),
+        ),
+
+        // ── Konten ───────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 72, 24, 72),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Label
+              const _SectionLabel('Brand Identity', light: true),
+              const SizedBox(height: 8),
+
+              // Title dengan gradient gold
+              ShaderMask(
+                shaderCallback: (b) => const LinearGradient(
+                  colors: [C.cream, C.gold, C.peach],
+                ).createShader(b),
+                child: const Text(
+                  'Mengenal Twins Roll',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Georgia',
+                    fontSize: 34,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
               ),
-              _ICard(
-                icon: '🎯',
-                label: 'Konsep',
-                body: 'Blind Flavour — kejutan rasa di setiap gigitan.',
+              const SizedBox(height: 14),
+
+              // Accent line gold
+              Container(
+                width: 60, height: 3,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [C.gold, C.warm]),
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
-              _ICard(
-                icon: '📍',
-                label: 'Lokasi',
-                body: 'Jl. Maospati – Bar. No.358-360\nMaospati, Magetan',
+              const SizedBox(height: 48),
+
+              // Info cards — semi-transparan di atas video
+              Wrap(
+                spacing: 20,
+                runSpacing: 20,
+                alignment: WrapAlignment.center,
+                children: const [
+                  _BrandCard(
+                    icon: '🏷️',
+                    label: 'Nama Brand',
+                    body: 'Twins Roll\nDua varian rasa dalam satu identitas khas.',
+                  ),
+                  _BrandCard(
+                    icon: '✨',
+                    label: 'Slogan',
+                    body: '"Kulit alami,\nsensasi di setiap gigitan"',
+                  ),
+                  _BrandCard(
+                    icon: '🎯',
+                    label: 'Konsep',
+                    body: 'Blind Flavour — kejutan rasa di setiap gigitan.',
+                  ),
+                  _BrandCard(
+                    icon: '📍',
+                    label: 'Lokasi',
+                    body: 'Jl. Maospati – Bar. No.358-360\nMaospati, Magetan',
+                  ),
+                ],
               ),
             ],
           ),
+        ),
 
-          const SizedBox(height: 60),
-          const _Label('Warna Khas Produk'),
-          const SizedBox(height: 28),
-
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            alignment: WrapAlignment.center,
-            children: const [
-              _Swatch(color: Color(0xFF3B1F0E), label: 'Coklat Tua'),
-              _Swatch(color: Color(0xFFC97B3A), label: 'Karamel'),
-              _Swatch(color: Color(0xFFEFA96A), label: 'Warm Orange'),
-              _Swatch(color: Color(0xFFF4C9A1), label: 'Peach Lembut'),
-              _Swatch(color: Color(0xFFFAF3E8), label: 'Krim Alami'),
-              _Swatch(color: Color(0xFF4A7C4E), label: 'Hijau Alami'),
-            ],
-          ),
-        ],
-      ),
+        // ── Letterbox bars (efek sinematik) ──────────
+        Positioned(
+          top: 0, left: 0, right: 0,
+          child: Container(height: 18, color: Colors.black.withOpacity(.55)),
+        ),
+        Positioned(
+          bottom: 0, left: 0, right: 0,
+          child: Container(height: 18, color: Colors.black.withOpacity(.55)),
+        ),
+      ],
     );
   }
 }
 
-class _ICard extends StatelessWidget {
+// ─── BRAND CARD (dark mode, di atas video) ────────────
+class _BrandCard extends StatelessWidget {
   final String icon, label, body;
 
-  const _ICard({required this.icon, required this.label, required this.body});
+  const _BrandCard({
+    required this.icon,
+    required this.label,
+    required this.body,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -616,30 +924,24 @@ class _ICard extends StatelessWidget {
       width: 185,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: C.white,
+        color: Colors.white.withOpacity(0.09),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: C.peach, width: 1.5),
+        border: Border.all(color: C.warm.withOpacity(.28), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: C.brown.withOpacity(.07),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-          const BoxShadow(
-            color: Color(0x08000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
+            color: Colors.black.withOpacity(.25),
+            blurRadius: 24, offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: 52, height: 52,
             decoration: BoxDecoration(
-              color: C.peach.withOpacity(.4),
+              color: C.warm.withOpacity(.15),
               shape: BoxShape.circle,
+              border: Border.all(color: C.warm.withOpacity(.3), width: 1),
             ),
             child: Center(child: Text(icon, style: const TextStyle(fontSize: 26))),
           ),
@@ -647,10 +949,8 @@ class _ICard extends StatelessWidget {
           Text(
             label.toUpperCase(),
             style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              color: C.caramel,
-              letterSpacing: 1.4,
+              fontSize: 10, fontWeight: FontWeight.w900,
+              color: C.gold, letterSpacing: 1.5,
             ),
           ),
           const SizedBox(height: 8),
@@ -658,9 +958,7 @@ class _ICard extends StatelessWidget {
             body,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 12.5,
-              color: C.brown,
-              height: 1.6,
+              fontSize: 12.5, color: C.peach, height: 1.65,
             ),
           ),
         ],
@@ -669,67 +967,22 @@ class _ICard extends StatelessWidget {
   }
 }
 
-class _Swatch extends StatelessWidget {
-  final Color color;
-  final String label;
-
-  const _Swatch({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: C.peach.withOpacity(.8), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(.4),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(.1),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: C.brown,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 // ══════════════════════════════════════════════════════
-//  MENU
+//  MENU SECTION
 // ══════════════════════════════════════════════════════
 class _MenuSection extends StatelessWidget {
   const _MenuSection();
 
   static const _sweet = [
-    _MItem('🍠', 'Ubi Coklat',    'Ubi ungu lembut berpadu coklat leleh yang kaya rasa.'),
-    _MItem('🍌', 'Coklat Pisang', 'Pisang manis dan coklat premium dalam kulit renyah.'),
-    _MItem('🧀', 'Jasuke Mozza',  'Jagung, susu & keju mozzarella leleh yang gurih-manis.'),
+    _MenuItem('🍠', 'Ubi Coklat',    'Ubi ungu lembut berpadu coklat leleh yang kaya rasa.'),
+    _MenuItem('🍌', 'Coklat Pisang', 'Pisang manis dan coklat premium dalam kulit renyah.'),
+    _MenuItem('🧀', 'Jasuke Mozza',  'Jagung, susu & keju mozzarella leleh yang gurih-manis.'),
   ];
 
   static const _savory = [
-    _MItem('🐔', 'Ayam Suwir Kemangi',   'Ayam suwir harum kemangi dalam kulit hijau alami.'),
-    _MItem('🍕', 'Pizza Roll',            'Saus tomat, keju & topping pizza dalam risol renyah.'),
-    _MItem('🌶️', 'Korean Spicy Chicken', 'Ayam pedas ala Korea dengan bumbu gochujang khas.'),
+    _MenuItem('🐔', 'Ayam Suwir Kemangi',   'Ayam suwir harum kemangi dalam kulit hijau alami.'),
+    _MenuItem('🍕', 'Pizza Roll',            'Saus tomat, keju & topping pizza dalam risol renyah.'),
+    _MenuItem('🌶️', 'Korean Spicy Chicken', 'Ayam pedas ala Korea dengan bumbu gochujang khas.'),
   ];
 
   @override
@@ -746,37 +999,31 @@ class _MenuSection extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 64, 24, 72),
       child: Column(
         children: [
-          const _Label('Menu Produk'),
+          const _SectionLabel('Menu Produk'),
           const SizedBox(height: 8),
-          const _Title('Varian Pilihan'),
+          const _SectionTitle('Varian Pilihan'),
           const SizedBox(height: 12),
-          Container(
-            width: 60,
-            height: 3,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [C.caramel, C.warm]),
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
+          _AccentLine(),
           const SizedBox(height: 44),
 
+          // Sweet variant label
           _VLabel('🍫  Sweet Variant', C.caramel),
           const SizedBox(height: 20),
           Wrap(
-            spacing: 20,
-            runSpacing: 20,
+            spacing: 20, runSpacing: 20,
             alignment: WrapAlignment.center,
-            children: _sweet.map((m) => _MCard(item: m, savory: false)).toList(),
+            children: _sweet.map((m) => _MenuCard(item: m, savory: false)).toList(),
           ),
 
           const SizedBox(height: 44),
+
+          // Savory variant label
           _VLabel('🌿  Savory Variant', C.green),
           const SizedBox(height: 20),
           Wrap(
-            spacing: 20,
-            runSpacing: 20,
+            spacing: 20, runSpacing: 20,
             alignment: WrapAlignment.center,
-            children: _savory.map((m) => _MCard(item: m, savory: true)).toList(),
+            children: _savory.map((m) => _MenuCard(item: m, savory: true)).toList(),
           ),
         ],
       ),
@@ -784,23 +1031,21 @@ class _MenuSection extends StatelessWidget {
   }
 }
 
-class _MItem {
+class _MenuItem {
   final String emoji, name, desc;
-
-  const _MItem(this.emoji, this.name, this.desc);
+  const _MenuItem(this.emoji, this.name, this.desc);
 }
 
-class _MCard extends StatefulWidget {
-  final _MItem item;
+class _MenuCard extends StatefulWidget {
+  final _MenuItem item;
   final bool savory;
-
-  const _MCard({required this.item, required this.savory});
+  const _MenuCard({required this.item, required this.savory});
 
   @override
-  State<_MCard> createState() => _MCardState();
+  State<_MenuCard> createState() => _MenuCardState();
 }
 
-class _MCardState extends State<_MCard> {
+class _MenuCardState extends State<_MenuCard> {
   bool _hov = false;
 
   @override
@@ -824,15 +1069,13 @@ class _MCardState extends State<_MCard> {
             if (_hov)
               BoxShadow(
                 color: (widget.savory ? C.green : C.caramel).withOpacity(.12),
-                blurRadius: 24,
-                offset: const Offset(0, 4),
+                blurRadius: 24, offset: const Offset(0, 4),
               ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image area with gradient
             Container(
               height: 150,
               decoration: BoxDecoration(
@@ -848,11 +1091,9 @@ class _MCardState extends State<_MCard> {
               child: Stack(
                 children: [
                   Positioned(
-                    top: -20,
-                    right: -20,
+                    top: -20, right: -20,
                     child: Container(
-                      width: 80,
-                      height: 80,
+                      width: 80, height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.white.withOpacity(.08),
@@ -860,21 +1101,16 @@ class _MCardState extends State<_MCard> {
                     ),
                   ),
                   Center(
-                    child: Text(
-                      widget.item.emoji,
-                      style: const TextStyle(fontSize: 56),
-                    ),
+                    child: Text(widget.item.emoji,
+                        style: const TextStyle(fontSize: 56)),
                   ),
                   Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
+                    top: 0, left: 0, right: 0,
                     child: Container(
                       height: 4,
                       decoration: BoxDecoration(
                         borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(22),
-                        ),
+                            top: Radius.circular(22)),
                         color: widget.savory ? C.green : C.caramel,
                       ),
                     ),
@@ -882,7 +1118,6 @@ class _MCardState extends State<_MCard> {
                 ],
               ),
             ),
-            // Body
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -891,19 +1126,15 @@ class _MCardState extends State<_MCard> {
                   Text(
                     widget.item.name,
                     style: const TextStyle(
-                      fontFamily: 'Georgia',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: C.brown,
+                      fontFamily: 'Georgia', fontSize: 14,
+                      fontWeight: FontWeight.bold, color: C.brown,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     widget.item.desc,
                     style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF7A5C3C),
-                      height: 1.5,
+                      fontSize: 12, color: Color(0xFF7A5C3C), height: 1.5,
                     ),
                   ),
                 ],
@@ -919,7 +1150,6 @@ class _MCardState extends State<_MCard> {
 class _VLabel extends StatelessWidget {
   final String label;
   final Color color;
-
   const _VLabel(this.label, this.color);
 
   @override
@@ -934,18 +1164,15 @@ class _VLabel extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: color.withOpacity(.3),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                blurRadius: 10, offset: const Offset(0, 4),
               ),
             ],
           ),
           child: Text(
             label,
             style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-              letterSpacing: .5,
+              color: Colors.white, fontWeight: FontWeight.w900,
+              fontSize: 13, letterSpacing: .5,
             ),
           ),
         ),
@@ -966,7 +1193,7 @@ class _VLabel extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════
-//  BLIND FLAVOUR
+//  BLIND FLAVOUR SECTION
 // ══════════════════════════════════════════════════════
 class _BlindSection extends StatelessWidget {
   const _BlindSection();
@@ -990,16 +1217,18 @@ class _BlindSection extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            width: 70,
-            height: 70,
+            width: 70, height: 70,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: C.warm.withOpacity(.12),
               border: Border.all(color: C.warm.withOpacity(.3), width: 1.5),
             ),
-            child: const Center(child: Text('🎰', style: TextStyle(fontSize: 32))),
+            child: const Center(
+              child: Text('🎰', style: TextStyle(fontSize: 32)),
+            ),
           ),
           const SizedBox(height: 20),
+
           ShaderMask(
             shaderCallback: (b) => const LinearGradient(
               colors: [C.peach, C.warm, C.peach],
@@ -1008,14 +1237,13 @@ class _BlindSection extends StatelessWidget {
               'Blind Flavour Experience',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 30,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+                fontFamily: 'Georgia', fontSize: 30,
+                fontWeight: FontWeight.bold, color: Colors.white,
               ),
             ),
           ),
           const SizedBox(height: 16),
+
           Container(
             constraints: const BoxConstraints(maxWidth: 480),
             child: const Text(
@@ -1026,6 +1254,7 @@ class _BlindSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 36),
+
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
             decoration: BoxDecoration(
@@ -1041,11 +1270,8 @@ class _BlindSection extends StatelessWidget {
             child: const Text(
               'BLIND FLAVOUR',
               style: TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: C.gold,
-                letterSpacing: 6,
+                fontFamily: 'Georgia', fontSize: 24,
+                fontWeight: FontWeight.bold, color: C.gold, letterSpacing: 6,
               ),
             ),
           ),
@@ -1056,15 +1282,15 @@ class _BlindSection extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════
-//  TEAM
+//  TEAM SECTION — 3 Anggota
 // ══════════════════════════════════════════════════════
 class _TeamSection extends StatelessWidget {
   const _TeamSection();
 
   static const _members = [
-    _TM('Nama Anggota 1', 'Ketua',   'NIM / Kelas', '👤', 1),
-    _TM('Nama Anggota 2', 'Anggota', 'NIM / Kelas', '👤', 2),
-    _TM('Nama Anggota 3', 'Anggota', 'NIM / Kelas', '👤', 3),
+    _TeamMember(name: 'Nama Anggota 1', role: 'Ketua',   nim: 'NIM / Kelas', emoji: '👤', num: 1),
+    _TeamMember(name: 'Nama Anggota 2', role: 'Anggota', nim: 'NIM / Kelas', emoji: '👤', num: 2),
+    _TeamMember(name: 'Nama Anggota 3', role: 'Anggota', nim: 'NIM / Kelas', emoji: '👤', num: 3),
   ];
 
   @override
@@ -1074,24 +1300,16 @@ class _TeamSection extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 72, 24, 72),
       child: Column(
         children: [
-          const _Label('Tim Penyusun'),
+          const _SectionLabel('Tim Penyusun'),
           const SizedBox(height: 8),
-          const _Title('Kelompok Kami'),
+          const _SectionTitle('Kelompok Kami'),
           const SizedBox(height: 12),
-          Container(
-            width: 60,
-            height: 3,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [C.caramel, C.warm]),
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
+          _AccentLine(),
           const SizedBox(height: 50),
           Wrap(
-            spacing: 28,
-            runSpacing: 28,
+            spacing: 28, runSpacing: 28,
             alignment: WrapAlignment.center,
-            children: _members.map((m) => _TCard(m: m)).toList(),
+            children: _members.map((m) => _TeamCard(member: m)).toList(),
           ),
         ],
       ),
@@ -1099,28 +1317,29 @@ class _TeamSection extends StatelessWidget {
   }
 }
 
-class _TM {
+class _TeamMember {
   final String name, role, nim, emoji;
   final int num;
-
-  const _TM(this.name, this.role, this.nim, this.emoji, this.num);
+  const _TeamMember({
+    required this.name, required this.role,
+    required this.nim, required this.emoji, required this.num,
+  });
 }
 
-class _TCard extends StatefulWidget {
-  final _TM m;
-
-  const _TCard({required this.m});
+class _TeamCard extends StatefulWidget {
+  final _TeamMember member;
+  const _TeamCard({required this.member});
 
   @override
-  State<_TCard> createState() => _TCardState();
+  State<_TeamCard> createState() => _TeamCardState();
 }
 
-class _TCardState extends State<_TCard> {
+class _TeamCardState extends State<_TeamCard> {
   bool _hov = false;
 
   Color get _badge {
-    if (widget.m.num == 1) return C.brown;
-    if (widget.m.num == 3) return C.green;
+    if (widget.member.num == 1) return C.brown;
+    if (widget.member.num == 3) return C.green;
     return C.caramel;
   }
 
@@ -1138,14 +1357,12 @@ class _TCardState extends State<_TCard> {
           color: C.white,
           borderRadius: BorderRadius.circular(26),
           border: Border.all(
-            color: _hov ? C.peach : C.peach.withOpacity(.6),
-            width: 1.5,
+            color: _hov ? C.peach : C.peach.withOpacity(.6), width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
               color: C.brown.withOpacity(_hov ? .16 : .08),
-              blurRadius: _hov ? 36 : 18,
-              offset: const Offset(0, 8),
+              blurRadius: _hov ? 36 : 18, offset: const Offset(0, 8),
             ),
             if (_hov)
               BoxShadow(color: _badge.withOpacity(.1), blurRadius: 20),
@@ -1158,8 +1375,7 @@ class _TCardState extends State<_TCard> {
               children: [
                 // Avatar
                 Container(
-                  width: 82,
-                  height: 82,
+                  width: 82, height: 82,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
@@ -1171,21 +1387,20 @@ class _TCardState extends State<_TCard> {
                     boxShadow: [
                       BoxShadow(
                         color: _badge.withOpacity(.3),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
+                        blurRadius: 14, offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: Center(
                     child: Text(
-                      widget.m.emoji,
+                      widget.member.emoji,
                       style: const TextStyle(fontSize: 32),
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
 
-                // Badge
+                // Role badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   decoration: BoxDecoration(
@@ -1196,74 +1411,59 @@ class _TCardState extends State<_TCard> {
                     boxShadow: [
                       BoxShadow(
                         color: _badge.withOpacity(.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                        blurRadius: 8, offset: const Offset(0, 3),
                       ),
                     ],
                   ),
                   child: Text(
-                    widget.m.role.toUpperCase(),
+                    widget.member.role.toUpperCase(),
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
+                      color: Colors.white, fontSize: 10,
+                      fontWeight: FontWeight.w900, letterSpacing: 1.2,
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
 
                 Text(
-                  widget.m.name,
+                  widget.member.name,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontFamily: 'Georgia',
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: C.brown,
+                    fontFamily: 'Georgia', fontSize: 14,
+                    fontWeight: FontWeight.bold, color: C.brown,
                   ),
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  widget.m.nim,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFFA07850),
-                  ),
+                  widget.member.nim,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFFA07850)),
                 ),
               ],
             ),
 
-            // Number badge floating above
+            // Number badge floating
             Positioned(
-              top: -68,
-              left: 0,
-              right: 0,
+              top: -68, left: 0, right: 0,
               child: Center(
                 child: Container(
-                  width: 32,
-                  height: 32,
+                  width: 32, height: 32,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [C.warm, C.caramel],
-                    ),
+                    gradient: const LinearGradient(colors: [C.warm, C.caramel]),
                     border: Border.all(color: Colors.white, width: 2.5),
                     boxShadow: [
                       BoxShadow(
                         color: C.warm.withOpacity(.5),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
+                        blurRadius: 10, offset: const Offset(0, 3),
                       ),
                     ],
                   ),
                   child: Center(
                     child: Text(
-                      '${widget.m.num}',
+                      '${widget.member.num}',
                       style: const TextStyle(
                         color: C.brown,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
+                        fontWeight: FontWeight.w900, fontSize: 14,
                       ),
                     ),
                   ),
@@ -1290,7 +1490,6 @@ class _Footer extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 44, 24, 32),
       child: Column(
         children: [
-          // Logo text
           ShaderMask(
             shaderCallback: (b) => const LinearGradient(
               colors: [C.cream, C.warm],
@@ -1298,10 +1497,8 @@ class _Footer extends StatelessWidget {
             child: const Text(
               'Twins Roll',
               style: TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+                fontFamily: 'Georgia', fontSize: 28,
+                fontWeight: FontWeight.bold, color: Colors.white,
               ),
             ),
           ),
@@ -1328,11 +1525,9 @@ class _Footer extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Container(
-                  width: 6,
-                  height: 6,
+                  width: 6, height: 6,
                   decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: C.caramel,
+                    shape: BoxShape.circle, color: C.caramel,
                   ),
                 ),
               ),
@@ -1373,9 +1568,7 @@ class _Footer extends StatelessWidget {
               Text(
                 '081 216 363 561',
                 style: TextStyle(
-                  fontSize: 12.5,
-                  color: C.warm,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5, color: C.warm, fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -1390,8 +1583,7 @@ class _Footer extends StatelessWidget {
               boxShadow: [
                 BoxShadow(
                   color: C.warm.withOpacity(.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 5),
+                  blurRadius: 16, offset: const Offset(0, 5),
                 ),
               ],
             ),
@@ -1401,10 +1593,7 @@ class _Footer extends StatelessWidget {
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
                 foregroundColor: C.brown,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 44,
-                  vertical: 16,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(50),
                 ),
@@ -1412,9 +1601,7 @@ class _Footer extends StatelessWidget {
               child: const Text(
                 'ORDER NOW!',
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 14,
-                  letterSpacing: 2,
+                  fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 2,
                 ),
               ),
             ),
@@ -1436,29 +1623,27 @@ class _Footer extends StatelessWidget {
 // ══════════════════════════════════════════════════════
 //  SHARED WIDGETS
 // ══════════════════════════════════════════════════════
-class _Label extends StatelessWidget {
+class _SectionLabel extends StatelessWidget {
   final String label;
-
-  const _Label(this.label);
+  final bool light;
+  const _SectionLabel(this.label, {this.light = false});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       label.toUpperCase(),
-      style: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w900,
-        color: C.caramel,
+      style: TextStyle(
+        fontSize: 11, fontWeight: FontWeight.w900,
+        color: light ? C.warm : C.caramel,
         letterSpacing: 3,
       ),
     );
   }
 }
 
-class _Title extends StatelessWidget {
+class _SectionTitle extends StatelessWidget {
   final String title;
-
-  const _Title(this.title);
+  const _SectionTitle(this.title);
 
   @override
   Widget build(BuildContext context) {
@@ -1466,10 +1651,21 @@ class _Title extends StatelessWidget {
       title,
       textAlign: TextAlign.center,
       style: const TextStyle(
-        fontFamily: 'Georgia',
-        fontSize: 32,
-        fontWeight: FontWeight.bold,
-        color: C.brown,
+        fontFamily: 'Georgia', fontSize: 32,
+        fontWeight: FontWeight.bold, color: C.brown,
+      ),
+    );
+  }
+}
+
+class _AccentLine extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 60, height: 3,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [C.caramel, C.warm]),
+        borderRadius: BorderRadius.circular(4),
       ),
     );
   }
