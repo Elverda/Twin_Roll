@@ -338,7 +338,7 @@ class _HeroSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 36),
-                    _GlowButton(label: '🍴  Lihat Menu Kami', onTap: () {}),
+                    _GlowButton(label: 'Lihat Menu Kami', onTap: () {}),
                   ],
                 ),
               ),
@@ -724,19 +724,25 @@ class _MenuSection extends StatelessWidget {
 
   static const _sweet = [
     _MenuItem('🍠', 'Ubi Coklat',
-        'Ubi ungu lembut berpadu coklat leleh yang kaya rasa.'),
+        'Ubi ungu lembut berpadu coklat leleh yang kaya rasa.',
+        image: 'assets/ubi_coklat.png'),
     _MenuItem('🍌', 'Coklat Pisang',
-        'Pisang manis dan coklat premium dalam kulit renyah.'),
+        'Pisang manis dan coklat premium dalam kulit renyah.',
+        image: 'assets/pisang_coklat.png'),
     _MenuItem('🧀', 'Jasuke Mozza',
-        'Jagung, susu & keju mozzarella leleh yang gurih-manis.'),
+        'Jagung, susu & keju mozzarella leleh yang gurih-manis.',
+        image: 'assets/jasuke_mozza.png'),
   ];
   static const _savory = [
     _MenuItem('🐔', 'Ayam Suwir Kemangi',
-        'Ayam suwir harum kemangi dalam kulit hijau alami.'),
+        'Ayam suwir harum kemangi dalam kulit hijau alami.',
+        image: 'assets/ayam_suwir.png'),
     _MenuItem('🍕', 'Pizza Roll',
-        'Saus tomat, keju & topping pizza dalam risol renyah.'),
+        'Saus tomat, keju & topping pizza dalam risol renyah.',
+        image: 'assets/pizza_roll.png'),
     _MenuItem('🌶️', 'Korean Spicy Chicken',
-        'Ayam pedas ala Korea dengan bumbu gochujang khas.'),
+        'Ayam pedas ala Korea dengan bumbu gochujang khas.',
+        image: 'assets/korean_spicy.png'),
   ];
 
   @override
@@ -759,7 +765,7 @@ class _MenuSection extends StatelessWidget {
           const SizedBox(height: 12),
           _AccentLine(),
           const SizedBox(height: 44),
-          _VLabel('🍫  Sweet Variant', C.caramel),
+          _VLabel('Sweet Variant', C.caramel),
           const SizedBox(height: 20),
           Wrap(
             spacing: 20, runSpacing: 20,
@@ -768,7 +774,7 @@ class _MenuSection extends StatelessWidget {
             _sweet.map((m) => _MenuCard(item: m, savory: false)).toList(),
           ),
           const SizedBox(height: 44),
-          _VLabel('🌿  Savory Variant', C.green),
+          _VLabel('Savory Variant', C.green),
           const SizedBox(height: 20),
           Wrap(
             spacing: 20, runSpacing: 20,
@@ -784,7 +790,8 @@ class _MenuSection extends StatelessWidget {
 
 class _MenuItem {
   final String emoji, name, desc;
-  const _MenuItem(this.emoji, this.name, this.desc);
+  final String? image;
+  const _MenuItem(this.emoji, this.name, this.desc, {this.image});
 }
 
 class _MenuCard extends StatefulWidget {
@@ -852,9 +859,23 @@ class _MenuCardState extends State<_MenuCard> {
                           color: Colors.white.withOpacity(.08)),
                     ),
                   ),
-                  Center(
-                      child: Text(widget.item.emoji,
-                          style: const TextStyle(fontSize: 56))),
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                      child: widget.item.image != null
+                          ? Image.asset(
+                              widget.item.image!,
+                              fit: BoxFit.cover,
+                              alignment: Alignment(0, 0.3)
+                            )
+                          : Center(
+                              child: Text(
+                                widget.item.emoji,
+                                style: const TextStyle(fontSize: 56),
+                              ),
+                            ),
+                    ),
+                  ),
                   Positioned(
                     top: 0, left: 0, right: 0,
                     child: Container(
@@ -872,16 +893,20 @@ class _MenuCardState extends State<_MenuCard> {
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(widget.item.name,
+                  Text(
+                    widget.item.name,
+                    textAlign: TextAlign.center,
                       style: const TextStyle(
                           fontFamily: 'Georgia',
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
                           color: C.brown)),
                   const SizedBox(height: 6),
-                  Text(widget.item.desc,
+                  Text(
+                    widget.item.desc,
+                    textAlign: TextAlign.center,
                       style: const TextStyle(
                           fontSize: 12, color: C.textMuted, height: 1.5)),
                 ],
@@ -1092,7 +1117,7 @@ class _BlindSectionState extends State<_BlindSection>
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
-                isSweet ? '🍫 Sweet' : '🌿 Savory',
+                isSweet ? 'Sweet' : 'Savory',
                 style: const TextStyle(
                   color: Color(0xFFF2C5A0),
                   fontSize: 11,
@@ -1408,8 +1433,8 @@ class _TeamSection extends StatelessWidget {
         name: 'Nama Anggota 2', role: 'Anggota',
         nim: 'NIM / Kelas', emoji: '👤', num: 2),
     _TeamMember(
-        name: 'Nama Anggota 3', role: 'Anggota',
-        nim: 'NIM / Kelas', emoji: '👤', num: 3),
+        name: 'Manda Fatimah Azaziah', role: 'Anggota',
+        nim: '25051204310', emoji: '👤', num: 3),
   ];
 
   @override
