@@ -967,7 +967,7 @@ class _HeroSection extends StatelessWidget {
                       ),
                       child: const Text(
                         'Risol dengan kulit alami yang renyah dipadukan dengan isian lumer yang lezat. '
-                            'Mengusung konsep Blind Flavour — setiap varian menghadirkan kejutan rasa '
+                            'Mengusung konsep Blind Flavour setiap varian menghadirkan kejutan rasa '
                             'manis maupun gurih yang siap memanjakan setiap gigitanmu.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
@@ -1390,11 +1390,11 @@ class _StaggeredBrandCardsState extends State<_StaggeredBrandCards>
     _BrandCardData(
         icon: '🎯',
         label: 'Konsep',
-        body: 'Blind Flavour — kejutan rasa di setiap gigitan.'),
+        body: 'Blind Flavour kejutan rasa di setiap gigitan.'),
     _BrandCardData(
         icon: '📍',
         label: 'Lokasi',
-        body: 'Jl. Maospati – Bar. No.358-360\nMaospati, Magetan'),
+        body: 'Jl. Maospati Bar. No.358-360\nMaospati, Magetan'),
   ];
 
   @override
