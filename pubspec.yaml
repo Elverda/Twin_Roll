@@ -10,23 +10,14 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  video_player: ^2.9.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  video_player: ^2.9.2
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/banner_sweet.png
-    - assets/banner_savory.png
-    - assets/logo.png
-    - assets/brand_cinematic.mp4
-    - assets/ayam_suwir.png
-    - assets/jasuke_mozza.png
-    - assets/korean_spicy.png
-    - assets/pisang_coklat.png
-    - assets/pizza_roll.png
-    - assets/ubi_coklat.png
+    - assets/

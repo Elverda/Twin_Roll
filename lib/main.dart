@@ -2077,23 +2077,6 @@ class _BlindSectionState extends State<_BlindSection>
               ),
             ),
           ),
-          Positioned(
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(.50),
-                  borderRadius: BorderRadius.circular(14)),
-              child: Text(
-                  isSweet ? 'Sweet' : 'Savory',
-                  style: const TextStyle(
-                      color: Color(0xFFF2C5A0),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: .5)),
-            ),
-          ),
         ],
       ),
     );
@@ -2439,24 +2422,24 @@ class _TeamSection extends StatelessWidget {
     this.revealOffset = 11,
   });
 
-  static const _members = [
+  static final _members = [
     _TeamMember(
         name: 'Izora Elverda Narulita Putri',
         role: 'Ketua',
         nim: '25051204287',
-        emoji: '👤',
+        image: 'assets/izora.png',
         num: 1),
     _TeamMember(
         name: 'Muhammad Abdullah Ro\'in',
         role: 'Anggota',
         nim: '25051204270',
-        emoji: '👤',
+        image: 'assets/abdullah.png',
         num: 2),
     _TeamMember(
         name: 'Manda Fatimah Azaziah',
         role: 'Anggota',
         nim: '25051204310',
-        emoji: '👤',
+        image: 'assets/manda2.png',
         num: 3),
   ];
 
@@ -2553,13 +2536,14 @@ class _StaggeredTeamCardsState extends State<_StaggeredTeamCards>
 }
 
 class _TeamMember {
-  final String name, role, nim, emoji;
+  final String name, role, nim;
+  final String? image;
   final int num;
-  const _TeamMember(
+  _TeamMember(
       {required this.name,
         required this.role,
         required this.nim,
-        required this.emoji,
+        this.image,
         required this.num});
 }
 
@@ -2628,9 +2612,19 @@ class _TeamCardState extends State<_TeamCard> {
                           offset: const Offset(0, 4))
                     ],
                   ),
-                  child: Center(
-                      child: Text(widget.member.emoji,
-                          style: const TextStyle(fontSize: 32))),
+                  child: ClipOval(
+                    child: widget.member.image != null
+                        ? Image.asset(
+                            widget.member.image!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Center(
+                                child: Text('👤',
+                                    style: TextStyle(fontSize: 32))),
+                          )
+                        : const Center(
+                            child:
+                                Text('👤', style: TextStyle(fontSize: 32))),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Container(
